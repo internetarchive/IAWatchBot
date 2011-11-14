@@ -20,13 +20,18 @@ if form.getlist("checkbox"):
     for item in form.getlist("checkbox"):
         c.execute("""update reports set resolved=1 where key=%s""", (item,))
         conn.commit()
+        
+filters = ""
+
+if form.getfirst("author"):
+    filters +=" AND author='%s'" % form.getfirst("author")
 
 if display == "all":
-    c.execute('select * from reports')
+    c.execute('select * from reports %s' % filters)
 elif display == "resolved":
-    c.execute('select * from reports where resolved=1')
+    c.execute('select * from reports where resolved=1 %s' % filters)
 else:
-    c.execute('select * from reports where resolved=0')
+    c.execute('select * from reports where resolved=0 %s' % filters)
 reports = c.fetchall()
 reports.sort()
 reports.reverse()
@@ -54,6 +59,7 @@ for line in displaylist:
         author = '<a href="http://openlibrary.org%s">%s</a>' % (line[3], line[3][8:])
     else:
         author = '<a href="http://openlibrary.org/admin/ip/%s">%s</a>' % (line[3], line[3])
+    author += ' [<a href="?author=%s">filter</a>]' % line[3]
     dt = "%s/%s/%s %s:%s" % (line[0][5:7], line[0][8:10], line[0][0:4], line[0][11:13], line[0][14:16])
     diff = ""
     if line[5] != 1:
