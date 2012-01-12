@@ -62,17 +62,17 @@ class index:
         
     def prepare_where(self, i):
         where = '1 = 1'
-        if i.display == 'all':
+        if i.get('display') == 'all':
             pass
-        elif i.display == 'resolved':
+        elif i.get('display') == 'resolved':
             where += ' AND resolved=1'
         else:
             where += ' AND resolved=0'
             
-        if i.author:
+        if i.get('author'):
             where += ' AND author=$author'
             
-        if i.problem:
+        if i.get('problem'):
             where += ' AND problem=$problem'
         return where
             
@@ -94,6 +94,20 @@ class diff:
         html = urllib.urlopen(url).read()
         root = lxml.html.fromstring(html).get_element_by_id("contentBody")
         return render.diff(lxml.html.tostring(root), row, queryparams=web.input())
+        
+    def next(self, key, rev):
+        i = web.input(_method="GET")
+        where = index().prepare_where(i)
+        items = [(row.key, row.revision) for row in db.select('reports', where=where, order="time desc", vars=i)]
+        row_index = items.index((key, int(rev)))
+        key, rev = items[row_index+1]
+        return web.url("/diff%s@%s" % (key, rev), **i)
+        
+    def POST(self, key, rev):
+        i = web.input(action=None)
+        print "POST", key, rev, i
+        if i.action == "next":
+            raise web.seeother(self.next(key, rev))
         
 if __name__ == '__main__':
     app.run()
