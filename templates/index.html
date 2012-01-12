@@ -1,0 +1,73 @@
+$def with (rows, status, page, npages, queryparams)
+<html>
+    <head>
+        <title>Vandalism Center</title>
+        <style type="text/css">
+        
+        tr.resolved {
+            background: #ccc;
+        }
+        a.small {
+            font-size: 0.9em;
+        }
+        td.time {
+            width: 120px;
+        }
+        </style>
+        <script type="text/javascript" src="http://www.archive.org/includes/jquery-1.6.1.js"></script>
+        <script type="text/javascript">
+            \$(function () {
+                \$('#checkall').click(function () {
+                    \$(this).parents('').find(':checkbox').attr('checked', this.checked);
+                });
+            });
+        </script>
+    </head>
+    <body>
+        <b>Vandalism Reports</b>
+        
+        <p>
+        If you edit one of the reported items, the report will be automatically resolved within 10 minutes.
+        If a report requires no edit, please submit the report to resolve it. 
+        <p>
+
+        <form name="myform" method="POST">
+            <table border=1>
+                <tr>
+                    <th>Time of Edit</th>
+                    <th>Item</th>
+                    <th>Author</th>
+                    <th>Comment</th>
+                    <th>Problem</th>
+                    <th>
+                        <div class="radio"><input type="checkbox" name="checkall" id="checkall" $status>
+                        <label for="checkall">I've dealt with this</label></div>
+                    </th>
+                </tr>  
+                $for row in rows:
+                    <tr class="$(row.resolved and 'resolved' or '')">
+                        <td class="time">$row.time.strftime("%Y-%m-%d %R")</td>
+                        <td><a href="$row.key">$row.title</a> - <a href="$url('/diff%s@%d' % (row.key, row.revision), **queryparams)" class="diff small">diff</a></td>
+                        <td>
+                            $if row.author_name:
+                                <a href="http://openlibrary.org$row.author">$row.author_name</a>
+                            $else:
+                                <a href="http://openlibrary.org/admin/ip/$row.author">$row.author</a>
+                            - <a class="small" href="$changequery(author=row.author)">filter</a>
+                        </td>
+                        <td>$row.comment</td>
+                        <td><a href="$changequery(problem=row.problem)">$row.problem</a></td>
+                        <td><input type="checkbox" name="checkbox" value="$row.key" $status/></td>
+                     </tr>
+            </table>
+            <div align="center"><input type="submit" value="Submit"></div>
+    
+            Page:
+            $for p in range(1, npages+1):
+                $if p == page:
+                   $p
+                $else:
+                    <a href="$changequery(page=p)">$p</a>
+        </form>
+    </body>
+</html>

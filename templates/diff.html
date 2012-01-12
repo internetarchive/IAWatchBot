@@ -1,0 +1,60 @@
+$def with (html, row, queryparams)
+<html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="http://openlibrary.org/static/build/all.css"/>
+        <style type="text/css">
+            body {
+                background: #D3D3D3;
+                padding: 20px;
+            }
+            .center {
+                text-align: center;
+            }
+            #header2 {
+                text-align: left;
+                padding: 0px 20px;
+            }
+            .comment {
+            }
+            #contentHead h3 {
+                padding: 0px;
+                margin: 0px 0px 20px 0px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="background">
+            <div id="placement">
+                <div id="content">
+                    <div id="contentHead">
+                        <div style="float: right;">
+                            <form method="POST">
+                                <a href="$url('/', **queryparams)">Home</a>&nbsp;
+                                <button name="action" value="prev">&larr; Prev</a>
+                                <button class="fixthis" name="action" value="spam">Spam/Revert</button>
+                                <button class="fixthis" name="action" value="not-spam">Not Spam</button>
+                                <button name="action" value="next">Next &rarr;</button>
+                            </form>
+                        </div>
+        
+                        <span class="small sansserief darkgreen">Diff of</span>
+                        <h3><a href="$row.key?v=$row.revision">$row.title@row.revision</a></h3>
+        
+                        <div class="small sansserief">Modified by                 
+                            $if row.author_name:
+                                <a href="http://openlibrary.org$row.author">$row.author_name</a>
+                            $else:
+                                <a href="http://openlibrary.org/admin/ip/$row.author">$row.author</a>
+                            on <span class="time">$row.time.strftime("%Y-%m-%d %R")</span>
+                        </div>
+        
+                        <div class="small sansserief darkgreen">$row.comment</div>
+                        <div class="problem red">Problem: $row.problem</div>
+                    </div>
+        
+                    $:html
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

@@ -1,94 +1,99 @@
 #!/usr/bin/env python
 
-import sqlite3
-import cgi
-import psycopg2
+import web
+import datetime
+import re
+import urllib
+import lxml.html
+
+urls = (
+    "/", "index",
+    "/diff(/.*)@(\d+)", "diff"
+)
+app = web.application(urls, globals())
+db = web.database(dbn="postgres", db="vandalism", user="dmontalvo", pw="iawatchbot")
+
+render = web.template.render("templates/", globals={
+    "changequery": web.changequery,
+    "url": web.url,
+    "range": range
+})
 
 REPORTS_PER_PAGE = 50
 
-conn = psycopg2.connect('dbname=vandalism user=dmontalvo password=iawatchbot')
-c = conn.cursor()
+def parse_datetime(value):
+    """Creates datetime object from isoformat.
+    
+        >>> t = '2008-01-01T01:01:01.010101'
+        >>> parse_datetime(t).isoformat()
+        '2008-01-01T01:01:01.010101'
+    """
+    if isinstance(value, datetime.datetime):
+        return value
+    else:
+        tokens = re.split('-|T|:|\.| ', value)
+        return datetime.datetime(*map(int, tokens))
 
-form = cgi.FieldStorage()
-pagenum = 1
-display = "unresolved"
-if form.getlist("page"):
-    pagenum = int(form.getlist("page")[0])
-if form.getlist("display"):
-    display = form.getlist("display")[0]
-if form.getlist("checkbox"):
-    for item in form.getlist("checkbox"):
-        c.execute("""update reports set resolved=1 where key=%s""", (item,))
-        conn.commit()
+class index:
+    def GET(self):
+        i = web.input(page=1, display=None, problem=None, author=None)
         
-filters = ""
+        page = min(1, web.intget(i.page, 1))
+        offset = (page-1) * REPORTS_PER_PAGE
+        limit = REPORTS_PER_PAGE
+        
+        where = self.prepare_where(i)
+        rowcount = db.select('reports', what='count(*) as count', where=where, vars=i)[0].count 
+        npages = int(rowcount/REPORTS_PER_PAGE) + 1 # approx
 
-if form.getfirst("author"):
-    filters +=" AND author='%s'" % form.getfirst("author")
+        rows = db.select('reports', where=where, limit=limit, offset=offset, order="time desc", vars=i)
+        
+        rows = [self.process_row(row) for row in rows]
+        status = any(not row.resolved for row in rows)
+        return render.index(rows, status, page, npages, queryparams=web.input())
+        
+    def process_row(self, row):
+        row.time = parse_datetime(row.time)
+        if row.author.startswith("/people/"):
+            row.author_name = row.author[len("/people/"):]
+        else:
+            row.author_name = None
+        return row
+        
+    def prepare_where(self, i):
+        where = '1 = 1'
+        if i.display == 'all':
+            pass
+        elif i.display == 'resolved':
+            where += ' AND resolved=1'
+        else:
+            where += ' AND resolved=0'
+            
+        if i.author:
+            where += ' AND author=$author'
+            
+        if i.problem:
+            where += ' AND problem=$problem'
+        return where
+            
+    def POST(self):
+        i = web.input(checkbox=[])
+        db.update("reports", resolved=1, where="key in $checkbox", vars=i)
+        raise web.seeother(web.ctx.fullpath)
 
-if display == "all":
-    c.execute('select * from reports %s' % filters)
-elif display == "resolved":
-    c.execute('select * from reports where resolved=1 %s' % filters)
-else:
-    c.execute('select * from reports where resolved=0 %s' % filters)
-reports = c.fetchall()
-reports.sort()
-reports.reverse()
-maxindex = REPORTS_PER_PAGE * pagenum
-minindex = maxindex - REPORTS_PER_PAGE
-displaylist = reports[minindex:maxindex]
-any_unresolved = False
-for report in displaylist:
-    if report[7] == 0:
-        any_unresolved = True
-status = " disabled"
-if any_unresolved:
-    status = ""
-
-print "Content-type: text/html; charset=UTF-8\n\n"
-print "<html><body><title>Vandalism Center</title><b>Vandalism Reports</b><p>If you edit one of the reported items, the report will be automatically resolved within 10 minutes. If a report requires no edit, please submit the report to resolve it. <p>"
-print """<form name="myform" method="POST"><table border=1><tr><th>Time of Edit</th><th>Item</th><th>Author</th><th>Comment</th><th>Problem</th><th><div class="radio"><input type="checkbox" name="checkall" id="checkall"%s> <label for="checkall">I've dealt with this</label></div></th></tr>""" % status
-for line in displaylist:
-    tag = '<tr>'
-    status = ""
-    if line[7] == 1:
-        tag = '<tr bgcolor="#CCCCCC">'
-        status = " disabled"
-    if "/people/" in line[3]:
-        author = '<a href="http://openlibrary.org%s">%s</a>' % (line[3], line[3][8:])
-    else:
-        author = '<a href="http://openlibrary.org/admin/ip/%s">%s</a>' % (line[3], line[3])
-    author += ' [<a href="?author=%s">filter</a>]' % line[3]
-    dt = "%s/%s/%s %s:%s" % (line[0][5:7], line[0][8:10], line[0][0:4], line[0][11:13], line[0][14:16])
-    diff = ""
-    if line[5] != 1:
-        diff = ' - <a href="http://openlibrary.org%s?b=%s&a=%s&_compare=Compare&m=diff"><font size=1>diff</font></a>' % (line[1], line[5], line[5]-1)
-    tablerow =  '%s<td>%s</td><td><a href="http://openlibrary.org%s">%s</a>%s</td><td>%s</td><td>%s</td><td>%s</td><td><input type="checkbox" name="checkbox" value="%s"%s></td></tr>' % (tag, dt, line[1], line[2], diff, author, line[4], line[6], line[1], status)
-    print tablerow
-print '</table><br>'
-print '<div align="center"><input type="submit" value="Submit"></div></form>'
-print "Page: "
-for x in range(1, (len(reports)+REPORTS_PER_PAGE-1)/REPORTS_PER_PAGE+1):
-    if x == pagenum:
-        print x
-    else:
-        print '<a href="http://ol-bots.us.archive.org/cgi-bin/vandalismcenter.py?page=%s&display=%s">%s</a>' % (x, display , x)
-if display == "resolved":
-    print '<br>Display: <a href="http://ol-bots.us.archive.org/cgi-bin/vandalismcenter.py">Unresolved</a> Resolved <a href="http://ol-bots.us.archive.org/cgi-bin/vandalismcenter.py?display=all">All</a>'
-elif display == "all":
-    print '<br>Display: <a href="http://ol-bots.us.archive.org/cgi-bin/vandalismcenter.py">Unresolved</a> <a href="http://ol-bots.us.archive.org/cgi-bin/vandalismcenter.py?display=resolved">Resolved</a> All'
-else:
-    print '<br>Display: Unresolved <a href="http://ol-bots.us.archive.org/cgi-bin/vandalismcenter.py?display=resolved">Resolved</a> <a href="http://ol-bots.us.archive.org/cgi-bin/vandalismcenter.py?display=all">All</a>'
-
-print '<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.min.js"></script>'
-print """<script type="text/javascript">
-$(function () {
-$('#checkall').click(function () {
-$(this).parents('').find(':checkbox').attr('checked', this.checked);
-});
-});
-</script>"""
-print '</body></html>'
-
-c.close()
+class diff:
+    def GET(self, key, rev):
+        try:
+            where = "key=$key AND revision=$rev"
+            row = db.select('reports', where=where, limit=1, order="time desc", vars=locals())[0]
+            row = index().process_row(row)
+        except IndexError:
+            raise web.notfound()
+        
+        url = "http://openlibrary.org%s?m=diff&b=%s" % (key, rev)
+        html = urllib.urlopen(url).read()
+        root = lxml.html.fromstring(html).get_element_by_id("contentBody")
+        return render.diff(lxml.html.tostring(root), row, queryparams=web.input())
+        
+if __name__ == '__main__':
+    app.run()
