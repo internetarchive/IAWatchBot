@@ -93,21 +93,42 @@ class diff:
         url = "http://openlibrary.org%s?m=diff&b=%s" % (key, rev)
         html = urllib.urlopen(url).read()
         root = lxml.html.fromstring(html).get_element_by_id("contentBody")
-        return render.diff(lxml.html.tostring(root), row, queryparams=web.input())
+        
+        # convert relative URLs to absolute
+        for a in root.cssselect("a"):
+            if 'href' in a.attrib:
+                a.attrib['href'] = urllib.basejoin("http://openlibrary.org/", a.attrib['href'])
+        
+        return render.diff(lxml.html.tostring(root), row, 
+            queryparams=web.input(), 
+            next=self.next(key, rev), 
+            prev=self.prev(key, rev))
         
     def next(self, key, rev):
+        return self.get_nextprev(key, rev, 1)
+        
+    def prev(self, key, rev):
+        return self.get_nextprev(key, rev, -1)
+        
+    def get_nextprev(self, key, rev, offset):
+        """Returns next url when offset is 1 and prev url when offset is -1.
+        """
         i = web.input(_method="GET")
         where = index().prepare_where(i)
         items = [(row.key, row.revision) for row in db.select('reports', where=where, order="time desc", vars=i)]
-        row_index = items.index((key, int(rev)))
-        key, rev = items[row_index+1]
-        return web.url("/diff%s@%s" % (key, rev), **i)
+        try:
+            row_index = items.index((key, int(rev)))
+            key, rev = items[row_index+offset]
+            return web.url("/diff%s@%s" % (key, rev), **i)
+        except IndexError:
+            return None
         
     def POST(self, key, rev):
         i = web.input(action=None)
-        print "POST", key, rev, i
-        if i.action == "next":
-            raise web.seeother(self.next(key, rev))
+        if i.action == "not-spam":
+            next = self.next(key, rev)
+            db.update("reports", where="key=$key AND revision=$rev", resolved=1, vars=locals())
+            raise web.seeother(next)
         
 if __name__ == '__main__':
     app.run()

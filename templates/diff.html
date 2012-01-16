@@ -1,4 +1,4 @@
-$def with (html, row, queryparams)
+$def with (html, row, next, prev, queryparams)
 <html>
     <head>
         <link rel="stylesheet" type="text/css" href="http://openlibrary.org/static/build/all.css"/>
@@ -30,15 +30,21 @@ $def with (html, row, queryparams)
                         <div style="float: right;">
                             <form method="POST">
                                 <a href="$url('/', **queryparams)">Home</a>&nbsp;
-                                <button name="action" value="prev">&larr; Prev</a>
+                                $if prev:
+                                    <a href="$prev">&larr; Prev</a>
+                                $else:
+                                    <span>&larr; Prev</span>
                                 <button class="fixthis" name="action" value="spam">Spam/Revert</button>
-                                <button class="fixthis" name="action" value="not-spam">Not Spam</button>
-                                <button name="action" value="next">Next &rarr;</button>
+                                <button name="action" value="not-spam">Not Spam</button>
+                                $if next:
+                                    <a href="$next">Next &rarr;</a>
+                                $else:
+                                    <span>Next &rarr;</span>
                             </form>
                         </div>
         
                         <span class="small sansserief darkgreen">Diff of</span>
-                        <h3><a href="$row.key?v=$row.revision">$row.title@$row.revision</a></h3>
+                        <h3><a href="http://openlibrary.org$row.key">$row.title</a></h3>
         
                         <div class="small sansserief">Modified by                 
                             $if row.author_name:
