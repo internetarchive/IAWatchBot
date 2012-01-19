@@ -39,6 +39,32 @@ def bad_links(before, after):
 def insert(time, key, title, author, comment, revision, problem):
     curs.execute("insert into reports (time, key, title, author, comment, revision, problem, resolved) values (%s, %s, %s, %s, %s, %s, %s, %s)", (time, key, title, author, comment, revision, problem, 0))
     conn.commit()
+    
+def jsonget(url):
+    text = urllib.urlopen(url).read()
+    return json.loads(text)
+    
+def get_admin_users():
+    group = jsonget("http://openlibrary.org/usergroup/admin.json")
+    return [m['key'] for m in group['members']]
+
+def get_api_users():
+    group = jsonget("http://openlibrary.org/usergroup/api.json")
+    return [m['key'] for m in group['members']]    
+
+def get_trusted_users():
+    """Returns keys of all users with "trusted-user"" tag.
+    """
+    rows = jsonget("http://ol-infobase1:7000/openlibrary.org/_store/_query?type=account&name=tags&value=trusted-user")
+    # row['key'] will be like "account/foo", need to take the last part to get "foo".
+    return ["/people/" + row['key'].split("/")[-1] for row in rows]
+        
+def get_whitelist():
+    keys = set()
+    keys.update(get_admin_users())
+    keys.update(get_api_users())
+    keys.update(get_trusted_users())
+    return list(keys)
 
 # Make sure only one instance of the bot is running at one time
 if os.path.exists("iawb_lock.txt"):
@@ -72,19 +98,9 @@ try:
 
     # Start creating the log
     logstring = 'Started at: %s\n' % t
-
-    # Get the whitelist
-    adminquery = urllib.urlopen("http://openlibrary.org/usergroup/admin.json")
-    l = json.JSONDecoder().decode(adminquery.read())
-    whitelist = []
-    adminlist = []
-    for member in l['members']:
-        whitelist.append(member['key'])
-        adminlist.append(member['key'])
-    apiquery = urllib.urlopen("http://openlibrary.org/usergroup/api.json")
-    n = json.JSONDecoder().decode(apiquery.read())
-    for member in n['members']:
-        whitelist.append(member['key'])
+    
+    adminlist = get_admin_users()
+    whitelist = get_whitelist()
 
     # Query for recent changes
     changesquery = urllib.urlopen("http://openlibrary.org/recentchanges.json?limit=1000")
