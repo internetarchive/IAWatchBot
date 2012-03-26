@@ -47,7 +47,7 @@ $def with (rows, status, page, npages, queryparams)
                 $for row in rows:
                     <tr class="$(row.resolved and 'resolved' or '')">
                         <td class="time">$row.time.strftime("%Y-%m-%d %R")</td>
-                        <td><a href="$row.key">$row.title</a> - <a href="$url('/diff%s@%d' % (row.key, row.revision), **queryparams)" class="diff small">diff</a></td>
+                        <td><a href="http://openlibrary.org$row.key">$row.title</a> - <a href="$url('/diff%s@%d' % (row.key, row.revision), **queryparams)" class="diff small">diff</a></td>
                         <td>
                             $if row.author_name:
                                 <a href="http://openlibrary.org$row.author">$row.author_name</a>
